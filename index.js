@@ -18,7 +18,7 @@ let config = {
 	outFile: "./out.lua",
 	clientMain: null,
 };
-const requireMatchRegexp = /require(\(["'][a-zA-Z/]+["']\))/gm;
+const requireMatchRegexp = /require(\(["'][a-zA-Z/\.]+["']\))/gm;
 const cwd = process.cwd();
 const argv = yargs(hideBin(process.argv)).argv;
 const loadConfig = async () => {
@@ -57,9 +57,10 @@ const link = async (string) => {
 				const length = split.length - 1;
 				split[length] = split[length] + ".lua";
 				promises.push(
-					read(path.join(cwd, ...split)).then(
-						(s) => (found[match.match(/[a-zA-Z0-9/]+/)] = s)
-					)
+					(async () => {
+						const s = await read(path.join(cwd, ...split));
+						found[match.match(/[a-zA-Z0-9/]+/)] = await link(s);
+					})()
 				);
 			}
 		});
@@ -67,7 +68,7 @@ const link = async (string) => {
 		await Promise.all(promises);
 		m.forEach((match, groupIndex) => {
 			if (groupIndex === 0) {
-				const matches = match.match(/[a-zA-Z0-9/\/]+/gm);
+				const matches = match.match(/[a-zA-Z0-9/\/\.]+/gm);
 				const ptr = matches[1];
 				string = string.replace(match, `(function() ${found[ptr]} end)()`);
 			}
@@ -113,7 +114,6 @@ const developmentServer = async () => {
 			})
 			.catch((e) => res.status(400).send(String(e)));
 	});
-	console.log("h");
 	for (const file of await readdir(cwd)) {
 		if (file.endsWith(".lua")) {
 			watchFile(path.join(cwd, file), async () => {
