@@ -2,16 +2,13 @@
 
 import chalk from "chalk";
 import clipboard from "clipboardy";
-import express from "express";
 import { watchFile } from "fs";
 import { readdir, readFile, writeFile } from "fs/promises";
-import localtunnel from "localtunnel";
 import ora from "ora";
 import path from "path";
-import { v4 } from "uuid";
 import { hideBin } from "yargs/helpers";
 import yargs from "yargs/yargs";
-
+import { io } from "socket.io-client";
 // below are default config values, to be overriden by `pack.config.json`
 let config = {
 	serverMain: "./init.lua",
@@ -96,23 +93,22 @@ const build = async () => {
 };
 
 const developmentServer = async () => {
-	let tunnel;
-	const app = express();
-	const createTunnel = async () => {
-		tunnel = await localtunnel({
-			port: 3002,
-			subdomain: v4(),
-		});
-		await clipboard.write(tunnel.url);
+	const socket = io("https://tempbin.dasus1.repl.co");
+	const create = async () => {
+		socket.emit("createPaste", await read(path.join(cwd, config.outFile)));
 	};
-	await createTunnel();
-	app.get("/", async (_, res) => {
-		readFile(path.join(cwd, config.outFile))
-			.then(async (buffer) => {
-				res.status(200).send(buffer.toString());
-				setTimeout(async () => await createTunnel(), 200);
-			})
-			.catch((e) => res.status(400).send(String(e)));
+	socket.on("pasteDeleted", () => create());
+	socket.on("pasteCreated", async (id) => {
+		const url = "https://tempbin.dasus1.repl.co/" + id;
+		clipboard
+			.write(url)
+			.catch((e) =>
+				console.log(chalk.red("failed writing to clipboard, " + String(e)))
+			)
+			.finally(() => console.log(chalk.green("Development URL: " + url)));
+	});
+	socket.on("connect", () => {
+		create();
 	});
 	for (const file of await readdir(cwd)) {
 		if (file.endsWith(".lua")) {
@@ -122,8 +118,6 @@ const developmentServer = async () => {
 			});
 		}
 	}
-	console.log("Pack development server running on port 3002");
-	app.listen(3002);
 };
 
 switch (argv._[0]) {
