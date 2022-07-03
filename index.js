@@ -67,7 +67,7 @@ const link = async (string) => {
 			if (groupIndex === 0) {
 				const matches = match.match(/[a-zA-Z0-9/\/\.]+/gm);
 				const ptr = matches[1];
-				string = string.replace(match, `(function() ${found[ptr]} end)()`);
+				string = string.replace(match, `(function(...) ${found[ptr]} end)()`);
 			}
 		});
 	}
@@ -111,10 +111,15 @@ const developmentServer = async () => {
 		create();
 	});
 	for (const file of await readdir(cwd)) {
-		if (file.endsWith(".lua")) {
-			watchFile(path.join(cwd, file), async () => {
+		if (file.endsWith(".lua") && file.indexOf(config.outFile) !== -1) {
+			watchFile(path.join(cwd, file), () => {
 				console.log("File %s changed, rebuilding...", file);
-				await build();
+				build()
+				.then(() => spinner.succeed(chalk.green("Finished building project!")))
+				.catch((e) =>
+					spinner.fail(chalk.red("Failed building project: " + String(e)))
+				);
+
 			});
 		}
 	}
