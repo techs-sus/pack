@@ -62,12 +62,13 @@ const read = (s) =>
       throw e;
     });
 
-const link = async (string) => {
+const link = async (path3) => {
   let them;
+  let _split = path3.split("/");
+  let string = await read(path3);
+  const path2 = path3.slice(0, path3.length - _split[_split.length - 1].length);
+  // TODO: Fix path2 mutation in V8
   while ((them = requireMatchRegexp.exec(string)) !== null) {
-    if (them.index === requireMatchRegexp.lastIndex) {
-      requireMatchRegexp.lastIndex++;
-    }
     const found = {};
     const promises = [];
     them.forEach((match, groupIndex) => {
@@ -76,10 +77,12 @@ const link = async (string) => {
         const split = parsed.split("/");
         const length = split.length - 1;
         split[length] = split[length] + ".lua";
+        // console.log(path.join(path2, ...split), path2);
         promises.push(
           (async () => {
-            const s = await read(path.join(cwd, ...split));
-            found[match.match(/[a-zA-Z0-9/]+/)] = await link(s);
+            found[match.match(/[a-zA-Z0-9/]+/)] = await link(
+              path.join(path2, ...split)
+            );
           })()
         );
       }
@@ -88,7 +91,7 @@ const link = async (string) => {
     await Promise.all(promises);
     m.forEach((match, groupIndex) => {
       if (groupIndex === 0) {
-        const ptr = match.match(/[a-zA-Z0-9\.\/]+/gm)[1];
+        const ptr = match.match(/[a-zA-Z0-9/]+/gm)[1];
         string = string.replace(
           match,
           `(function(...) ${found[ptr]} end)(...)`
@@ -101,14 +104,13 @@ const link = async (string) => {
 
 const build = async () => {
   await loadConfig();
-  const serverMain = await read(config.serverMain);
   const finalString = `--> compiled by pack (github.com/techs-sus/pack)\n${await link(
-    serverMain
+    path.join(cwd, config.serverMain)
   )}${
     (config.clientMain !== null &&
       "\n--> inserting client" +
         `NLS(${await link(
-          await read(config.clientMain)
+          path.join(cwd, config.clientMain)
         )}, owner.PlayerGui)\n`) ||
     ""
   }`;
@@ -171,9 +173,9 @@ switch (argv._[0]) {
     let spinner = ora(chalk.blue("Building project..."));
     build()
       .then(() => spinner.succeed(chalk.green("Finished building project!")))
-      .catch((e) =>
-        spinner.fail(chalk.red("Failed building project: " + String(e)))
-      );
+      .catch((e) => {
+        throw e;
+      });
     break;
   default:
     console.log(
